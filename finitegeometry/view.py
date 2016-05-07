@@ -304,17 +304,7 @@ class Canvas(QGraphicsView):
                 mm = (i, v)
         return mm
     
-    
-    def listReset(self, l):
-        self.grid = Grid()
-        for s in l:
-            mo = self.interpreter.interpret(s)
-            #lit = QListWidgetItem(s,self.parent().acts)
-            #lit.setFlags(lit.flags()| Qt.ItemIsUserCheckable)
-            mo(self.grid)
-            #self.setItemIcon(lit)
-            #lit.setCheckState(False)
-            
+    def redrawScene(self):
         self.scene().clear()
         self.placeInScene()
     
@@ -324,8 +314,7 @@ class Canvas(QGraphicsView):
         mo = self.interpreter.interpret(s)
         if mo :
             mo(self.grid)
-            self.scene().clear()
-            self.placeInScene()
+            self.redrawScene()
             if not self.timer.isActive():
                 lit = QListWidgetItem(s,self.parent().acts)
                 lit.setFlags(lit.flags()| Qt.ItemIsUserCheckable)
@@ -423,43 +412,67 @@ class InterpreterWidget(QComboBox):
 
 class FiniteGeometryEditor(QMainWindow):
     
-    def printall(self):
-        num = 0
+    def applyAction(self, s):
+        mo = self.canv.interpreter.interpret(s)
+        mo(self.canv.grid)
+    
+    def resetGrid(self):
         self.canv.resetGrid()
-        for k in range(0, self.acts.count()):
-            it = self.acts.item(k)
-            s = it.data(Qt.DisplayRole)
-            mo = self.canv.interpreter.interpret(s)
-            mo(self.canv.grid)
-            if it.checkState() == Qt.Checked:
-                fn = "%d.png" % num
-                self.canv.scene().clear()
-                self.canv.placeInScene()
-                self.canv.update()
-                sce = self.canv.scene()
-                wid = int(sce.width())
-                hei = int(sce.height())
-                im = QImage(wid, hei,QImage.Format_ARGB32)
-                pai = QPainter()
-                im.fill(Qt.white)
-                pai.begin(im)
-                pai.setRenderHint(QPainter.Antialiasing)
-                self.canv.scene().render(pai)
-                pai.end()
-                im.save(fn)
-                num += 1
-        self.rerun()
         
-    def rerun(self):
-        self.canv.resetGrid()
-        for k in range(0, self.acts.count()):
-            it = self.acts.item(k)
-            s = it.data(Qt.DisplayRole)
-            mo = self.canv.interpreter.interpret(s)
-            mo(self.canv.grid)
-        self.canv.scene().clear()
-        self.canv.placeInScene()
+    def scanList(self, iterat, get_command, init_state, before_interpret, after_interpret, after_list):
+        n = init_state
+        self.resetGrid()
+        for k in iterat:
+            s = get_command(k)
+            n = before_interpret(s, k, n)
+            self.applyAction(s)
+            n = after_interpret(s, k, n)
+        after_list(n)
+    
+    def save_checked_item(self, s,k,n):
+        if self.acts.item(k).checkState() == Qt.Checked:
+            fn = "%d.png" % n
+            self.redraw_and_update_canvas()
+            sce = self.canv.scene()
+            wid = int(sce.width())
+            hei = int(sce.height())
+            im = QImage(wid, hei,QImage.Format_ARGB32)
+            pai = QPainter()
+            im.fill(Qt.white)
+            pai.begin(im)
+            pai.setRenderHint(QPainter.Antialiasing)
+            self.canv.scene().render(pai)
+            pai.end()
+            im.save(fn)
+            n += 1
+        return n
+        
+    def get_command_from_listWidget(self, k):
+        it = self.acts.item(k)
+        return it.data(Qt.DisplayRole)
+    
+    def iterator_over_listWidget(self):
+        return range(0,self.acts.count())
+    
+    def redraw_and_update_canvas(self):
+        self.canv.redrawScene()
         self.canv.update()
+    
+    def rerun(self, *args):
+        self.scanList(self.iterator_over_listWidget(),
+                      self.get_command_from_listWidget,
+                      init_state=0,
+                      before_interpret=lambda x,y,z:z,
+                      after_interpret=lambda x,y,z:z,
+                      after_list=lambda x : self.redraw_and_update_canvas())
+
+    def printall(self):
+        self.scanList(self.iterator_over_listWidget(),
+                      self.get_command_from_listWidget,
+                      init_state=0,
+                      before_interpret=lambda x,y,z : z,
+                      after_interpret= self.save_checked_item,
+                      after_list=self.rerun)
         
     def selectall(self):
         for k in range(0, self.acts.count()):
@@ -470,14 +483,13 @@ class FiniteGeometryEditor(QMainWindow):
             self.acts.item(k).setCheckState(Qt.Unchecked)
         
     def clearList(self):
-        self.canv.listReset([])
         self.acts.clear()
+        self.rerun()
     
     def animation_frame(self):
         if self.frame == self.acts.count():
             self.canv.resetGrid()
-            self.canv.scene().clear()
-            self.canv.placeInScene()
+            self.canv.redrawScene()
             self.canv.update()
             self.acts.clearSelection()
             self.frame = 0
@@ -498,8 +510,7 @@ class FiniteGeometryEditor(QMainWindow):
             self.canv.setAcceptDrops(False)
             self.play.setDisabled(True)
             self.acts.setDisabled(True)
-            self.canv.scene().clear()
-            self.canv.placeInScene()
+            self.canv.redrawScene()
             self.canv.update()
             self.animation_timer.start(int(self.speed.text()))
         pass
@@ -534,7 +545,7 @@ class FiniteGeometryEditor(QMainWindow):
         self.inte.currentTextChanged.connect(self.canv.textFromInterpreter)
         self.canv.interpretMove.connect(self.canv.textFromInterpreter)
         # self.canv.moveAccepted.connect(lambda : self.play.setEnabled(True))
-        self.acts.resetAllAndRerun.connect(self.canv.listReset)
+        self.acts.resetAllAndRerun.connect(self.rerun)
         
         
         la = QVBoxLayout()
