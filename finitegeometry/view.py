@@ -1,3 +1,5 @@
+import os
+
 from PyQt5.QtCore import QPointF, QRectF, Qt, QLineF, QMimeData, QPoint, \
     pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QPainter, QBrush, QColor, QPen, QDrag, QPixmap, \
@@ -6,28 +8,32 @@ from PyQt5.QtPrintSupport import QPrinter
 from PyQt5.QtWidgets import QApplication, QGraphicsView, QMainWindow, \
     QGraphicsItem, QStyleOptionGraphicsItem, QGraphicsScene, QListWidget, \
     QLineEdit, QComboBox, QLabel, QDockWidget, QListWidgetItem, QVBoxLayout, \
-    QPushButton, QHBoxLayout, QWidget, QSpinBox
+    QPushButton, QHBoxLayout, QWidget, QSpinBox, QMenu, QMenuBar, QStatusBar, \
+    QFileDialog, QMessageBox, QColorDialog
 
 from finitegeometry.lang import Interpreter
 from finitegeometry.model import Grid, SE, SW, NE, NW
+import finitegeometry.constants as constants
 
 def pf(vertices):
-    def fnk(pai:QPainter, sogi:QStyleOptionGraphicsItem, wi=None, offset=(0,0)):
-        bru = QBrush(Qt.black)
+    def fnk(pai: QPainter, sogi: QStyleOptionGraphicsItem, wi=None,
+            offset=(0, 0)):
+        bru = QBrush(constants.FOREGROUND_COLOR)
         pai.setBrush(bru)
-        verts = [QPointF(x+offset[0],y+offset[1]) for (x,y) in vertices]
+        verts = [QPointF(x + offset[0], y + offset[1]) for (x, y) in vertices]
         pai.drawConvexPolygon(*verts)
+
     return fnk
-        
+
+
 class Tile(QGraphicsItem):
-    
     paintFuncs = {
-        SE : pf([(0,50),(50,50),(50,0)]),
-        NW : pf([(0,0),(0,50),(50,0)]),
-        SW : pf([(0,0),(0,50),(50,50)]),
-        NE : pf([(0,0),(50,50),(50,0)])
+        SE: pf([(0, 50), (50, 50), (50, 0)]),
+        NW: pf([(0, 0), (0, 50), (50, 0)]),
+        SW: pf([(0, 0), (0, 50), (50, 50)]),
+        NE: pf([(0, 0), (50, 50), (50, 0)])
     }
-    
+
     def __init__(self, indexi, indexj, frag, par=None):
         super(Tile, self).__init__(par)
         self.row = indexi
@@ -35,22 +41,21 @@ class Tile(QGraphicsItem):
         self.hovered = False
         self.paintFun = self.paintFuncs[frag]
         self.setAcceptDrops(True)
-        
-    def paint(self, pai:QPainter, sty, wi=None):
+
+    def paint(self, pai: QPainter, sty, wi=None):
         if self.isSelected():
-            pai.fillRect(self.boundingRect(), Qt.yellow)
+            pai.fillRect(self.boundingRect(), constants.SELECTION_COLOR)
         elif self.hovered:
-            pai.fillRect(self.boundingRect(), Qt.yellow)
+            pai.fillRect(self.boundingRect(), constants.SELECTION_COLOR)
         self.paintFun(pai, sty, wi)
-        
-    
+
     def boundingRect(self):
-        return QRectF(0,0,50,50)
-    
+        return QRectF(0, 0, 50, 50)
+
     def itemChange(self, change, val):
         if change == QGraphicsItem.ItemPositionHasChanged:
             pass
-                
+
         return super().itemChange(change, val);
 
     def mousePressEvent(self, event):
@@ -60,9 +65,10 @@ class Tile(QGraphicsItem):
             super(Tile, self).mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if QLineF(QPointF(event.screenPos()), QPointF(event.buttonDownScreenPos(Qt.LeftButton))).length() < QApplication.startDragDistance():
+        if QLineF(QPointF(event.screenPos()), QPointF(event.buttonDownScreenPos(
+                Qt.LeftButton))).length() < QApplication.startDragDistance():
             return
-    
+
         drag = QDrag(event.widget())
         mime = QMimeData()
         drag.setMimeData(mime)
@@ -74,29 +80,29 @@ class Tile(QGraphicsItem):
         height = f.height()
         num = int(ll[1])
         if ll[0] == 'r':
-            offsets = [(0,0), (width,0), (2*width,0), (3*width,0)]
+            offsets = [(0, 0), (width, 0), (2 * width, 0), (3 * width, 0)]
             width *= 4
-        elif ll[0] == 'c':            
-            offsets = [(0,0), (0,height), (0,2*height), (0,3*height)]
+        elif ll[0] == 'c':
+            offsets = [(0, 0), (0, height), (0, 2 * height), (0, 3 * height)]
             height *= 4
-        else :
-            offsets = [(0,0), (width,0), (0, height), (height, width)]
-            height *=2
-            width *=2
+        else:
+            offsets = [(0, 0), (width, 0), (0, height), (height, width)]
+            height *= 2
+            width *= 2
         pixmap = QPixmap(width, height)
         pixmap.fill(Qt.darkYellow)
         pai = QPainter()
-        
+
         pai.begin(pixmap)
         for it, off in zip(view.lastPhysicalSelection, offsets):
-            #it.hide()
-            it.paintFun(pai,None, None, offset=off)
+            # it.hide()
+            it.paintFun(pai, None, None, offset=off)
         pai.end()
         drag.setPixmap(pixmap)
-        
+
         drag.exec_(Qt.MoveAction | Qt.CopyAction, Qt.CopyAction)
-            
-        
+
+
         # pixmap = QPixmap(34, 34)
         # pixmap.fill(Qt.white)
         # 
@@ -113,14 +119,14 @@ class Tile(QGraphicsItem):
         # 
         # drag.exec_()
         # self.setCursor(Qt.OpenHandCursor)
-        
-    
+
     def mouseReleaseEvent(self, e):
         if self.isSelected():
-            self.scene().views()[0].decideSelection((self.row, 1),(self.col, 1),1)
+            self.scene().views()[0].decideSelection((self.row, 1),
+                                                    (self.col, 1), 1)
         else:
             pass
-        #super(Tile, self).mouseReleaseEvent(e)
+            # super(Tile, self).mouseReleaseEvent(e)
 
     def dropEvent(self, e):
         # for x in self.scene().views()[0].targetedItems(e.pos()):
@@ -146,18 +152,16 @@ class Tile(QGraphicsItem):
         #     x.update()
         super(Tile, self).dragLeaveEvent(e)
         pass
-    
+
 
 class Canvas(QGraphicsView):
-    
-    interpretMove = pyqtSignal(str)
     
     def __init__(self, grid, timer, par=None):
         super(Canvas, self).__init__(par)
         self.timer = timer
         self.rbRect = None
         self.targets = []
-        self.lastSelection = ('r',0)
+        self.lastSelection = ('r', 0)
         self.lastPhysicalSelection = []
         self.interpreter = Interpreter()
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -166,7 +170,7 @@ class Canvas(QGraphicsView):
         scene.setItemIndexMethod(QGraphicsScene.NoIndex)
         scene.setSceneRect(0, 0, 200, 200)
         self.setDragMode(QGraphicsView.RubberBandDrag)
-#        self.setRubberBandSelectionMode()
+        #        self.setRubberBandSelectionMode()
         self.setAcceptDrops(True)
         self.physicalGrid = {}
         self.setAcceptDrops(True)
@@ -177,58 +181,56 @@ class Canvas(QGraphicsView):
         self.setRenderHint(QPainter.Antialiasing)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
-        self.grid = grid # this is the model
+        self.grid = grid  # this is the model
         self.placeInScene()
-        
-    def resizeEvent(self, e:QResizeEvent):
-        #self.fitInView(QRectF(0, 0, e.size().height(), e.size().width()), Qt.IgnoreAspectRatio)
+
+    def resizeEvent(self, e: QResizeEvent):
+        # self.fitInView(QRectF(0, 0, e.size().height(), e.size().width()), Qt.IgnoreAspectRatio)
         os = e.oldSize()
         ns = e.size()
-        if (os.height(), os.width()) == (-1,-1):
+        if (os.height(), os.width()) == (-1, -1):
             os = ns
-        self.scale(ns.width()/os.width(), ns.height()/os.height())
-    
-    
-        
+        self.scale(ns.width() / os.width(), ns.height() / os.height())
+
     def resetGrid(self):
         self.grid = Grid()
-        
+
     def placeInScene(self):
         x = 0
         y = 0
-        for indexi , r in enumerate(self.grid.grid):
+        for indexi, r in enumerate(self.grid.grid):
             for indexj, i in enumerate(r):
                 t = Tile(indexi, indexj, i)
                 self.physicalGrid[(indexi, indexj)] = t
-                #t.setFlag(QGraphicsItem.ItemIsMovable)
+                # t.setFlag(QGraphicsItem.ItemIsMovable)
                 t.setFlag(QGraphicsItem.ItemIsSelectable)
                 t.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
-                t.setPos(x,y)
+                t.setPos(x, y)
                 self.scene().addItem(t)
                 x += t.boundingRect().width()
             y += t.boundingRect().height()
             x = 0
-            
-    def createSelection(self,a,b,c):
+
+    def createSelection(self, a, b, c):
         if not a and not b and not c:
             histo_r = {}
             histo_c = {}
             wereSelected = 0
             for x in self.items(self.rbRect):
                 # build histogram to understand who's selected
-                histo_r[x.row] = histo_r.get(x.row, 0)+1
-                histo_c[x.col] = histo_c.get(x.col, 0)+1
-                #x.setFlag(QGraphicsItem.ItemIsSelectable)
+                histo_r[x.row] = histo_r.get(x.row, 0) + 1
+                histo_c[x.col] = histo_c.get(x.col, 0) + 1
+                # x.setFlag(QGraphicsItem.ItemIsSelectable)
                 x.setSelected(False)
                 wereSelected += 1
             mr = self.__highest(histo_r)
             mc = self.__highest(histo_c)
             self.decideSelection(mr, mc, wereSelected)
-            
+
             self.rbRect = None
-        else :
+        else:
             self.rbRect = a
-    
+
     def decideSelection(self, mr, mc, wereSelected=1):
         self.lastPhysicalSelection.clear()
         if mc[1] > mr[1]:
@@ -239,105 +241,101 @@ class Canvas(QGraphicsView):
             self.lastSelection = ('r', mr[0])
         elif wereSelected == 1:
             if self.lastSelection[0] == 'r':
-                self.decideSelection((mr[0],100), mc)
+                self.decideSelection((mr[0], 100), mc)
             elif self.lastSelection[0] == 'c':
-                self.decideSelection(mr, (mc[0],100))
+                self.decideSelection(mr, (mc[0], 100))
             else:
-                self.blockSelect(mr[0],mc[0])
+                self.blockSelect(mr[0], mc[0])
         else:
             c = mc[0]
             r = mr[0]
-            bd = self.blockSelect(r,c)
+            bd = self.blockSelect(r, c)
             self.lastSelection = ('b', bd[2])
             pass
-    
-    def whichBlock(self,r,c):
+
+    def whichBlock(self, r, c):
         if c < 2 and r < 2:
             s = 0
-            return ((0,2), (0,2), s)
-        elif c >=2 and r < 2:
+            return ((0, 2), (0, 2), s)
+        elif c >= 2 and r < 2:
             s = 1
-            return ((0,2), (2,4), s)
-        elif c < 2 and r >=2:
+            return ((0, 2), (2, 4), s)
+        elif c < 2 and r >= 2:
             s = 2
-            return ((2,4), (0,2), s)
+            return ((2, 4), (0, 2), s)
         else:
             s = 3
-            return ((2,4), (2,4), s)
+            return ((2, 4), (2, 4), s)
 
     def select(self, gi):
         gi.setSelected(True)
         self.lastPhysicalSelection.append(gi)
-        
+
     def blockSelect(self, r, c):
-        (r,c,bid)= self.whichBlock(r,c)
-        self.doOnBlock(r,c,self.select)
-        return (r,c,bid)
-        
-    
+        (r, c, bid) = self.whichBlock(r, c)
+        self.doOnBlock(r, c, self.select)
+        return (r, c, bid)
+
     def doOnBlock(self, r, c, fun):
         for i in range(*r):
             for j in range(*c):
-                gi = self.physicalGrid[(i,j)]
+                gi = self.physicalGrid[(i, j)]
                 fun(gi)
 
     def rowSelect(self, r):
         self.doOnRow(r, self.select)
-    
-    def doOnRow(self,r, fun):
-        for x in range(0,4):
+
+    def doOnRow(self, r, fun):
+        for x in range(0, 4):
             gi = self.physicalGrid[(r, x)]
             fun(gi)
 
     def columnSelect(self, c):
         self.doOnColumn(c, self.select)
-    
+
     def doOnColumn(self, c, fun):
-        for x in range(0,4):
+        for x in range(0, 4):
             gi = self.physicalGrid[(x, c)]
             fun(gi)
-    
+
     def __highest(self, ha):
         mm = (None, 0)
         for i, v in ha.items():
             if mm[1] < v:
                 mm = (i, v)
         return mm
-    
+
     def redrawScene(self):
         self.scene().clear()
         self.placeInScene()
-    
-    #moveAccepted = pyqtSignal()
-    
+
+    moveAccepted = pyqtSignal()
+
     def textFromInterpreter(self, s):
         mo = self.interpreter.interpret(s)
-        if mo :
+        if mo:
             mo(self.grid)
             self.redrawScene()
             if not self.timer.isActive():
-                lit = QListWidgetItem(s,self.parent().acts)
-                lit.setFlags(lit.flags()| Qt.ItemIsUserCheckable)
-                lit.setCheckState(False)
-                self.setItemIcon(lit)
-            #self.moveAccepted.emit()
-            
+                self.parent().insert_action_item_in_list(s)
+                self.moveAccepted.emit()
+                
     def setItemIcon(self, lit):
         pim = QPixmap(50, 50)
         pai = QPainter()
-        pim.fill(Qt.white)
+        pim.fill(constants.BACKGROUND_COLOR)
         self.scene().clearSelection()
         pai.begin(pim)
         pai.setRenderHint(QPainter.Antialiasing)
         self.scene().render(pai)
         pai.end()
-        #pim.scaled(QSize(50,50), Qt.IgnoreAspectRatio,Qt.FastTransformation)
+        # pim.scaled(QSize(50,50), Qt.IgnoreAspectRatio,Qt.FastTransformation)
         ico = QIcon(pim)
         lit.setIcon(ico)
-    
+
     def collect(self, gi):
         self.targets.append(gi)
-        
+
     def targetedItems(self, pos):
         self.targets = []
         drop_tile = self.itemAt(pos)
@@ -349,10 +347,10 @@ class Canvas(QGraphicsView):
             self.doOnColumn(drop_tile.col, self.collect)
         else:
             (rs, cs, bid) = self.whichBlock(drop_tile.row, drop_tile.col)
-            self.doOnBlock(rs,cs, self.collect)
+            self.doOnBlock(rs, cs, self.collect)
         return self.targets
-    
-    def dropEvent(self, e:QDropEvent):
+
+    def dropEvent(self, e: QDropEvent):
         targets = self.targetedItems(e.pos())
         if len(targets) > 0:
             s = "%s%d%d"
@@ -364,62 +362,65 @@ class Canvas(QGraphicsView):
                 d = it.col
             elif act == 'b':
                 d = self.whichBlock(it.row, it.col)[2]
-            s = s% (self.lastSelection[0], self.lastSelection[1]+1,d+1)
-            self.interpretMove.emit(s)
+            s = s % (self.lastSelection[0], self.lastSelection[1] + 1, d + 1)
+            self.textFromInterpreter(s)
             e.setAccepted(True)
         super(Canvas, self).dropEvent(e)
         pass
-    
+
     def dragEnterEvent(self, e):
         super(Canvas, self).dragEnterEvent(e)
         pass
-    
+
     def dragMoveEvent(self, e):
         super(Canvas, self).dragMoveEvent(e)
         pass
-    
-    def dragLeaveEvent(self, e:QDragLeaveEvent):
+
+    def dragLeaveEvent(self, e: QDragLeaveEvent):
         super(Canvas, self).dragLeaveEvent(e)
         pass
+
 
 class SymmetryList(QListWidget):
     pass
 
+
 class ActionList(QListWidget):
-    
     resetAllAndRerun = pyqtSignal(list)
-    
+
     def mouseDoubleClickEvent(self, QMouseEvent):
         it = self.selectedItems()[0]
-        ss = self.row(it)+1
+        ss = self.row(it) + 1
         li = []
         for x in range(0, ss):
             li.append(self.item(x).data(Qt.DisplayRole))
         for x in range(self.row(it), self.count()):
             self.takeItem(ss)
-        
+
         # emit reset of model + rerun of the present items in the list
-        #self.clear()
+        # self.clear()
         self.resetAllAndRerun.emit(li)
         pass
 
+
 class DeclarationLabel(QLabel):
     pass
+
 
 class InterpreterWidget(QComboBox):
     pass
 
 
 class FiniteGeometryEditor(QMainWindow):
-    
     def applyAction(self, s):
         mo = self.canv.interpreter.interpret(s)
         mo(self.canv.grid)
-    
+
     def resetGrid(self):
         self.canv.resetGrid()
-        
-    def scanList(self, iterat, get_command, init_state, before_interpret, after_interpret, after_list):
+
+    def scanList(self, iterat, get_command, init_state, before_interpret,
+                 after_interpret, after_list):
         n = init_state
         self.resetGrid()
         for k in iterat:
@@ -428,64 +429,104 @@ class FiniteGeometryEditor(QMainWindow):
             self.applyAction(s)
             n = after_interpret(s, k, n)
         after_list(n)
-    
-    def save_checked_item(self, s,k,n):
+
+    def save_checked_item(self, s, k, n):
         if self.acts.item(k).checkState() == Qt.Checked:
-            fn = "%d.png" % n
+            fn = "%d%s.png" % n
             self.redraw_and_update_canvas()
             sce = self.canv.scene()
             wid = int(sce.width())
             hei = int(sce.height())
-            im = QImage(wid, hei,QImage.Format_ARGB32)
+            im = QImage(wid, hei, QImage.Format_ARGB32)
             pai = QPainter()
-            im.fill(Qt.white)
+            im.fill(constants.BACKGROUND_COLOR)
             pai.begin(im)
             pai.setRenderHint(QPainter.Antialiasing)
             self.canv.scene().render(pai)
             pai.end()
             im.save(fn)
-            n += 1
+            n = (n[0]+1, n[1])
         return n
-        
+
     def get_command_from_listWidget(self, k):
         it = self.acts.item(k)
         return it.data(Qt.DisplayRole)
-    
+
     def iterator_over_listWidget(self):
-        return range(0,self.acts.count())
-    
+        return range(0, self.acts.count())
+
     def redraw_and_update_canvas(self):
         self.canv.redrawScene()
         self.canv.update()
-    
+
     def rerun(self, *args):
         self.scanList(self.iterator_over_listWidget(),
                       self.get_command_from_listWidget,
                       init_state=0,
-                      before_interpret=lambda x,y,z:z,
-                      after_interpret=lambda x,y,z:z,
-                      after_list=lambda x : self.redraw_and_update_canvas())
+                      before_interpret=lambda x, y, z: z,
+                      after_interpret=lambda x, y, z: z,
+                      after_list=lambda x: self.redraw_and_update_canvas())
 
-    def printall(self):
+    def printall(self, name=''):
         self.scanList(self.iterator_over_listWidget(),
                       self.get_command_from_listWidget,
-                      init_state=0,
-                      before_interpret=lambda x,y,z : z,
-                      after_interpret= self.save_checked_item,
+                      init_state=(0, name),
+                      before_interpret=lambda x, y, z: z,
+                      after_interpret=self.save_checked_item,
                       after_list=self.rerun)
+
+    def insert_action_item_in_list(self, s):
+        lit = QListWidgetItem(s, self.acts)
+        lit.setFlags(lit.flags() | Qt.ItemIsUserCheckable)
+        lit.setCheckState(False)
+        self.canv.setItemIcon(lit)
+
+    def load_sequence_file(self, path):
+        commands = self.canv.interpreter.read_file(path)
+        self.acts.clear()
+        def addItemToList(s,k,n):
+            self.redraw_and_update_canvas()
+            self.insert_action_item_in_list(s)
+
+        self.scanList(iterat=commands,
+                      get_command=lambda x : x,
+                      init_state=0,
+                      before_interpret=lambda x, y, z: z,
+                      after_interpret=addItemToList,
+                      after_list=lambda x: self.redraw_and_update_canvas()
+                      )
+
+
+
+        pass
         
+    def print_to_file(self):
+        with open(self.current_file, 'w') as f:
+            self.scanList(self.iterator_over_listWidget(),
+                          self.get_command_from_listWidget,
+                          init_state=f,
+                          before_interpret=lambda x, y, z: f,
+                          after_interpret=self.write_comment,
+                          after_list=self.rerun)
+
+    def write_comment(self, x, y, f):
+        f.write(x + "\n")
+        s = str(self.canv.grid)
+        for k in s.split("\n"):
+            f.write("# " + k + "\n")
+
     def selectall(self):
         for k in range(0, self.acts.count()):
             self.acts.item(k).setCheckState(Qt.Checked)
-        
+
     def unselectall(self):
         for k in range(0, self.acts.count()):
             self.acts.item(k).setCheckState(Qt.Unchecked)
-        
+
     def clearList(self):
         self.acts.clear()
         self.rerun()
-    
+
     def animation_frame(self):
         if self.frame == self.acts.count():
             self.canv.resetGrid()
@@ -493,16 +534,16 @@ class FiniteGeometryEditor(QMainWindow):
             self.canv.update()
             self.acts.clearSelection()
             self.frame = 0
-        else:    
+        else:
             self.frameInList()
-    
+
     def frameInList(self):
         it = self.acts.item(self.frame)
         s = it.data(Qt.DisplayRole)
         self.canv.textFromInterpreter(s)
         self.acts.setCurrentItem(self.acts.item(self.frame))
-        self.frame =(self.frame+1)
-        
+        self.frame = (self.frame + 1)
+
     def start_playing(self):
         if self.acts.count() > 0:
             self.frame = self.acts.count()
@@ -514,7 +555,7 @@ class FiniteGeometryEditor(QMainWindow):
             self.canv.update()
             self.animation_timer.start(int(self.speed.text()))
         pass
-    
+
     def stop_playing(self):
         self.inte.setEnabled(True)
         self.play.setEnabled(True)
@@ -523,17 +564,18 @@ class FiniteGeometryEditor(QMainWindow):
         self.animation_timer.stop()
         self.rerun()
         pass
-        
+
+    TITLE = "The 4x4 Square[*]"
     def __init__(self):
         super(FiniteGeometryEditor, self).__init__()
         self.frame = 0
+        self.current_file = None
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self.animation_frame)
-        self.canv = Canvas(Grid(),self.animation_timer, self)
-        
-        self.setWindowTitle("Finite Geometry App")
+        self.canv = Canvas(Grid(), self.animation_timer, self)
+        self.setWindowTitle(self.TITLE)
+        self.createMenus()
         self.setCentralWidget(self.canv)
-        
         self.symm = SymmetryList()
         self.acts = ActionList()
         self.decl = DeclarationLabel()
@@ -543,22 +585,25 @@ class FiniteGeometryEditor(QMainWindow):
         # use validator to implement the logic that does not require
         # commands to be edited using text area!
         self.inte.currentTextChanged.connect(self.canv.textFromInterpreter)
-        self.canv.interpretMove.connect(self.canv.textFromInterpreter)
-        # self.canv.moveAccepted.connect(lambda : self.play.setEnabled(True))
+#        self.canv.interpretMove.connect(self.canv.textFromInterpreter)
+        self.canv.moveAccepted.connect(lambda : self.setWindowModified(True))
         self.acts.resetAllAndRerun.connect(self.rerun)
-        
-        
+
         la = QVBoxLayout()
         self.clear = QPushButton("Clear")
         self.sel_all = QPushButton("Select all")
         self.unsel_all = QPushButton("Unselect all")
         self.print = QPushButton("Print")
+        self.to_file = QPushButton("To file")
         self.print.pressed.connect(self.printall)
         self.sel_all.pressed.connect(self.selectall)
         self.unsel_all.pressed.connect(self.unselectall)
         self.clear.pressed.connect(self.clearList)
+        self.to_file.pressed.connect(self.print_to_file)
+
         bug = QHBoxLayout()
-        for k in [self.clear, self.sel_all, self.unsel_all, self.print]:
+        for k in [self.clear, self.sel_all, self.unsel_all,
+                  self.print, self.to_file]:
             bug.addWidget(k)
 
         ctrls = QHBoxLayout()
@@ -572,30 +617,186 @@ class FiniteGeometryEditor(QMainWindow):
         self.speed.setValue(500)
         for k in [self.play, self.stop, self.speed]:
             ctrls.addWidget(k)
-        
-        
+
         la.addWidget(self.acts)
         la.addLayout(ctrls)
         la.addLayout(bug)
         wi = QWidget()
         wi.setLayout(la)
         for title, item, pos in [
-                  ("Symmetries"       , self.symm, Qt.LeftDockWidgetArea),
-                  ("Actions performed", wi, Qt.RightDockWidgetArea),
-                  ("Initial element"  , self.decl, Qt.BottomDockWidgetArea),
-                  ("Interpreter"      , self.inte, Qt.BottomDockWidgetArea)]:
+            ("Symmetries", self.symm, Qt.LeftDockWidgetArea),
+            ("Actions performed", wi, Qt.RightDockWidgetArea),
+            ("Initial element", self.decl, Qt.BottomDockWidgetArea),
+            ("Interpreter", self.inte, Qt.BottomDockWidgetArea)]:
             dock = QDockWidget(title, self)
             dock.setWidget(item)
             item.setParent(dock)
-            dock.setFeatures(QDockWidget.DockWidgetFloatable| QDockWidget.DockWidgetMovable)
+            dock.setFeatures(
+                QDockWidget.DockWidgetFloatable | QDockWidget.DockWidgetMovable)
             self.addDockWidget(pos, dock)
+        self.setStatusBar(QStatusBar())
+
+    def load_file(self):
+        sqs = "sequence file (*.sqs)"
+        any = "*"
+        x4 = "4x4 square file (*.4x4)"
+        path, ty = QFileDialog.getOpenFileName(self, "Open File", '',
+                                              "%s\n%s\n%s"%(sqs, x4, any))
+        if path:
+            
+            if ty == sqs:
+                path = self.add_extension(path,".sqs")
+                self.load_sequence_file(path)
+            elif ty == x4:
+                path = self.add_extension(path,".4x4")
+                self.load_4x4_file(path)
+            else:
+                return
+            self.set_current_file(path)
+            
+    
         
+            
+    def set_current_file(self, path):
+        self.setWindowTitle((self.TITLE+" - %s[*]") % path)
+        self.setWindowModified(False)
+        self.current_file = path
+
+    def save_file(self):
+        if not self.current_file:
+            self.save_file_as()
+        else:
+            self.write_to_disk(self.current_file)
+            pass
+            
+    def save_file_as(self):
+        sqs = "sequence file (*.sqs)"
+        any = "*"
+        x4 = "4x4 square file (*.4x4)"
+        path, ty = QFileDialog.getSaveFileName(self, "Save File", '',
+                                              "%s\n%s\n%s"%(sqs, x4, any))
+        if path:
+            if ty == sqs:
+                path = self.add_extension(path,".sqs")
+                self.write_sequence_file(path)
+            elif ty == x4:
+                path = self.add_extension(path,".4x4")
+                self.write_4x4_file(path)
+            else:
+                pass
+            
+    
+    def add_extension(self, path, desired):
+        if path.endswith(desired):
+            return path
+        else:
+            return path+desired
+    
+    def write_sequence_file(self, path):
+        self.set_current_file(path)
+        self.print_to_file()
+        
+        
+    def write_4x4_file(path):
+        pass
+    
+    def export_sequence(self):
+        if self.current_file:
+            self.printall(name=os.path.basename(self.current_file))
+        else:
+            self.export_sequence_as()
+        pass
+        
+    def export_sequence_as(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export as png", '',
+                                              "*")
+        if path:
+            self.printall(name=os.path.basename(path))
+            self.set_current_file(path)
+        pass
+        
+    def select_foreground_color(self):
+        newColor = QColorDialog.getColor(title="Select foreground color")
+        if newColor:
+            constants.FOREGROUND_COLOR = newColor
+        
+    def select_background_color(self):
+        newColor = QColorDialog.getColor(title="Select background color")
+        if newColor:
+            constants.BACKGROUND_COLOR = newColor
+            self.canv.scene().setBackgroundBrush(newColor)
+            
+    def select_selection_color(self):
+        newColor = QColorDialog.getColor(title="Select selection color")
+        if newColor:
+            constants.SELECTION_COLOR = newColor
+    
+    def select_pattern(self):
+        pass
+        
+    def about_popup(self):
+        QMessageBox.about(self, self.TITLE, "© 2016 Gabriele Paganelli")
+        pass
+        
+    def createMenus(self):
+        def adda(a, s):
+            return a.addAction(s)
+
+        self.file = QMenu("File")
+
+        def fact(s):
+            return adda(self.file, s)
+
+        self.load = fact("Load")
+        self.load.triggered.connect(self.load_file)
+        self.save = fact("Save")
+        self.save.triggered.connect(self.save_file)
+        self.saveas = fact("Save as")
+        self.saveas.triggered.connect(self.save_file_as)
+        self.export = fact("Export")
+        self.export.triggered.connect(self.export_sequence)
+        self.exportas = fact("Export as")
+        self.exportas.triggered.connect(self.export_sequence_as)
+        self.quit = fact("Quit")
+        self.quit.triggered.connect(lambda : QApplication.quit())
+        self.edit = QMenu("Edit")
+
+        def eact(s):
+            return adda(self.edit, s)
+
+        def cact(s):
+            return adda(self.colors, s)
+        
+        self.colors = QMenu("Colors")
+        self.edit.addMenu(self.colors)
+        
+        self.fore = cact("Foreground")
+        self.back = cact("Background")
+        self.sele = cact("Selection")
+        
+        self.fore.triggered.connect(self.select_foreground_color)
+        self.back.triggered.connect(self.select_background_color)
+        self.sele.triggered.connect(self.select_selection_color)
+        self.initial = eact("Initial pattern")
+        self.initial.triggered.connect(self.select_pattern)
+        self.help = QMenu("Help")
+
+        def hact(s):
+            return adda(self.help, s)
+
+        self.about = hact("About")
+        self.about.triggered.connect(self.about_popup)
+        for x in [self.file, self.edit, self.help]:
+            self.menuBar().addMenu(x)
+
+        self.menuBar().setNativeMenuBar(False)
+
 
 if __name__ == '__main__':
-
     import sys
+
     app = QApplication(sys.argv)
     mw = FiniteGeometryEditor()
-    
+
     mw.show()
     sys.exit(app.exec_())

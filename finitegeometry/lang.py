@@ -7,7 +7,9 @@ class Interpreter:
         digits = "(1|2|3|4)"
         src = "(?P<src>"+digits+")"
         dst = "(?P<dst>"+digits+")"
-        self.pattern = re.compile("(?P<cmd>(r|c|b))"+"\s*"+src+"\s*"+dst)
+        comment = "#.*"
+        self.pattern = re.compile("(?P<cmd>(r|c|b))"+"\s*"+src+"\s*"+dst+"\s*")
+        #self.pattern = re.compile(comment+"|(?P<cmd>(r|c|b))"+"\s*"+src+"\s*"+dst+"\s*"+comment)
     
     def interpret(self, command):
         mo = self.pattern.fullmatch(command)
@@ -27,6 +29,14 @@ class Interpreter:
             
         return lambda x: c(x, src, dst)
     
+    def read_file(self, filename):
+        commands = []
+        with open(filename,'r') as f:
+            for li in f:
+                fn = self.interpret(li)
+                if fn:
+                    commands.append(li.strip())
+        return commands
     
 
 class Command:
