@@ -53,15 +53,25 @@ class QIV(Block):
 
 I , II, III, IV = QI(), QII(), QIII(), QIV()
 
+class GridPattern:
+    pattern = [ [SE, SW, SE, SW]
+        ,[NE, NW, NE, NW]
+        ,[SE, SW, SE, SW]
+        ,[NE, NW, NE, NW]]
+
+
 class Grid:
     
-    
     def __init__(self):
-        self.grid = [ [SE, SW, SE, SW]
-            ,[NE, NW, NE, NW]
-            ,[SE, SW, SE, SW]
-            ,[NE, NW, NE, NW]]
-        pass
+        self.grid = self.__shallow_copy_of_matrix(GridPattern.pattern) 
+        
+    def __copy__(self):
+        cp = Grid()
+        cp.grid = self.__shallow_copy_of_matrix(self.grid)
+        return cp
+        
+    def __shallow_copy_of_matrix(self, matr):
+        return [[el for el in row] for row in matr]
     
     def row(self, f, t):
         tmp = self.grid[f]

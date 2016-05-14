@@ -1,3 +1,4 @@
+import copy
 import os
 
 from PyQt5.QtCore import QPointF, QRectF, Qt, QLineF, QMimeData, QPoint, \
@@ -9,7 +10,7 @@ from PyQt5.QtWidgets import QApplication, QGraphicsView, QMainWindow, \
     QGraphicsItem, QStyleOptionGraphicsItem, QGraphicsScene, QListWidget, \
     QLineEdit, QComboBox, QLabel, QDockWidget, QListWidgetItem, QVBoxLayout, \
     QPushButton, QHBoxLayout, QWidget, QSpinBox, QMenu, QMenuBar, QStatusBar, \
-    QFileDialog, QMessageBox, QColorDialog
+    QFileDialog, QMessageBox, QColorDialog, QDialog
 
 from finitegeometry.lang import Interpreter
 from finitegeometry.model import Grid, SE, SW, NE, NW
@@ -192,8 +193,11 @@ class Canvas(QGraphicsView):
             os = ns
         self.scale(ns.width() / os.width(), ns.height() / os.height())
 
-    def resetGrid(self):
-        self.grid = Grid()
+    def resetGrid(self, grid = None):
+        if grid:
+            self.grid = grid
+        else:
+            self.grid = Grid()
 
     def placeInScene(self):
         x = 0
@@ -412,23 +416,50 @@ class InterpreterWidget(QComboBox):
 
 
 class FiniteGeometryEditor(QMainWindow):
-    def applyAction(self, s):
+    def applyAction(self, s,k,n):
         mo = self.canv.interpreter.interpret(s)
         mo(self.canv.grid)
+        
+    # def replace_precomputed_grid(self, s, k, n):
+    #     #s is the precomputed grid...
+        
 
     def resetGrid(self):
         self.canv.resetGrid()
 
-    def scanList(self, iterat, get_command, init_state, before_interpret,
-                 after_interpret, after_list):
+    # def scan_list(self, iterat, get_command, init_state, before_interpret,
+    #              after_interpret, after_list):
+    #     n = init_state
+    #     self.resetGrid()
+    #     for k in iterat:
+    #         s = get_command(k)
+    #         n = before_interpret(s, k, n)
+    #         self.applyAction(s)
+    #         n = after_interpret(s, k, n)
+    #     after_list(n)
+        
+    
+    def scan_list(self, iterat, get_command, init_state, before_interpret,
+                  interpret,after_interpret, after_list):
         n = init_state
         self.resetGrid()
         for k in iterat:
             s = get_command(k)
             n = before_interpret(s, k, n)
-            self.applyAction(s)
+            interpret(s,k,n)
             n = after_interpret(s, k, n)
         after_list(n)
+        
+    
+    def scan_list_of_commands(self, iterat, get_command, init_state, before_interpret,
+                              after_interpret, after_list):
+        self.scan_list(iterat, get_command, init_state, before_interpret,
+                         self.applyAction,after_interpret, after_list)
+
+    def save_checked_state(self, s, k, n):
+        if self.acts.item(k).checkState() == Qt.Checked:
+            n.append((self.acts.item(k), copy.copy(self.canv.grid)))
+        return n
 
     def save_checked_item(self, s, k, n):
         if self.acts.item(k).checkState() == Qt.Checked:
@@ -460,7 +491,7 @@ class FiniteGeometryEditor(QMainWindow):
         self.canv.update()
 
     def rerun(self, *args):
-        self.scanList(self.iterator_over_listWidget(),
+        self.scan_list_of_commands(self.iterator_over_listWidget(),
                       self.get_command_from_listWidget,
                       init_state=0,
                       before_interpret=lambda x, y, z: z,
@@ -468,12 +499,21 @@ class FiniteGeometryEditor(QMainWindow):
                       after_list=lambda x: self.redraw_and_update_canvas())
 
     def printall(self, name=''):
-        self.scanList(self.iterator_over_listWidget(),
+        self.scan_list_of_commands(self.iterator_over_listWidget(),
                       self.get_command_from_listWidget,
                       init_state=(0, name),
                       before_interpret=lambda x, y, z: z,
                       after_interpret=self.save_checked_item,
                       after_list=self.rerun)
+        
+    def precompute_selected_grids(self):
+        self.scan_list_of_commands(self.iterator_over_listWidget(),
+                      self.get_command_from_listWidget,
+                      init_state=self.precomputed,
+                      before_interpret=lambda x, y, z: z,
+                      after_interpret=self.save_checked_state,
+                      after_list=self.rerun)
+        return self.precomputed
 
     def insert_action_item_in_list(self, s):
         lit = QListWidgetItem(s, self.acts)
@@ -488,7 +528,7 @@ class FiniteGeometryEditor(QMainWindow):
             self.redraw_and_update_canvas()
             self.insert_action_item_in_list(s)
 
-        self.scanList(iterat=commands,
+        self.scan_list_of_commands(iterat=commands,
                       get_command=lambda x : x,
                       init_state=0,
                       before_interpret=lambda x, y, z: z,
@@ -502,7 +542,7 @@ class FiniteGeometryEditor(QMainWindow):
         
     def print_to_file(self):
         with open(self.current_file, 'w') as f:
-            self.scanList(self.iterator_over_listWidget(),
+            self.scan_list_of_commands(self.iterator_over_listWidget(),
                           self.get_command_from_listWidget,
                           init_state=f,
                           before_interpret=lambda x, y, z: f,
@@ -544,25 +584,57 @@ class FiniteGeometryEditor(QMainWindow):
         self.acts.setCurrentItem(self.acts.item(self.frame))
         self.frame = (self.frame + 1)
 
+    def disable_controls(self):
+        self.__enable_controls(False)
+        
+    def enable_controls(self):
+        self.__enable_controls(True)
+        
+    def __enable_controls(self, bo):
+        self.inte.setEnabled(bo)
+        self.play.setEnabled(bo)
+        self.play_selected.setEnabled(bo)
+        self.canv.setAcceptDrops(bo)
+        self.acts.setEnabled(bo)
+    
+
     def start_playing(self):
         if self.acts.count() > 0:
             self.frame = self.acts.count()
-            self.inte.setDisabled(True)
-            self.canv.setAcceptDrops(False)
-            self.play.setDisabled(True)
-            self.acts.setDisabled(True)
+            self.disable_controls()
+            self.animation_timer.timeout.connect(self.animation_frame)
             self.canv.redrawScene()
             self.canv.update()
             self.animation_timer.start(int(self.speed.text()))
         pass
 
     def stop_playing(self):
-        self.inte.setEnabled(True)
-        self.play.setEnabled(True)
-        self.canv.setAcceptDrops(True)
-        self.acts.setEnabled(True)
+        self.animation_timer.timeout.disconnect()
+        self.enable_controls()
         self.animation_timer.stop()
         self.rerun()
+        pass
+    
+    def start_playing_selected(self):
+        self.precompute_selected_grids()
+        
+        if len(self.precomputed) > 0:
+            self.disable_controls()
+            self.animation_precomputed_iterator = iter(self.precomputed)
+            self.animation_timer.timeout.connect(self.precomputed_animation_frame)
+            self.animation_timer.start(int(self.speed.text()))
+            pass
+    
+    def precomputed_animation_frame(self):
+        try:
+            (listitem, grid) = next(self.animation_precomputed_iterator)
+        except:
+            self.animation_precomputed_iterator = iter(self.precomputed)
+            (listitem, grid) = next(self.animation_precomputed_iterator)
+        self.canv.resetGrid(grid)
+        self.canv.redrawScene()
+        self.canv.update()
+        listitem.setSelected(True)
         pass
 
     TITLE = "The 4x4 Square[*]"
@@ -570,8 +642,9 @@ class FiniteGeometryEditor(QMainWindow):
         super(FiniteGeometryEditor, self).__init__()
         self.frame = 0
         self.current_file = None
+        self.precomputed = []
+        self.animation_precomputed_iterator = None
         self.animation_timer = QTimer()
-        self.animation_timer.timeout.connect(self.animation_frame)
         self.canv = Canvas(Grid(), self.animation_timer, self)
         self.setWindowTitle(self.TITLE)
         self.createMenus()
@@ -609,13 +682,15 @@ class FiniteGeometryEditor(QMainWindow):
         ctrls = QHBoxLayout()
         self.play = QPushButton("Play")
         self.play.pressed.connect(self.start_playing)
+        self.play_selected = QPushButton("Play selected")
+        self.play_selected.pressed.connect(self.start_playing_selected)
         self.stop = QPushButton("Stop")
         self.stop.pressed.connect(self.stop_playing)
         self.speed = QSpinBox()
         self.speed.setSingleStep(100)
         self.speed.setMaximum(10000)
         self.speed.setValue(500)
-        for k in [self.play, self.stop, self.speed]:
+        for k in [self.play, self.play_selected, self.stop, self.speed]:
             ctrls.addWidget(k)
 
         la.addWidget(self.acts)
@@ -732,6 +807,21 @@ class FiniteGeometryEditor(QMainWindow):
             constants.SELECTION_COLOR = newColor
     
     def select_pattern(self):
+        qdia = QDialog(self)
+        qdia.setWindowTitle("Select an initial pattern")
+        vbox = QVBoxLayout()
+        qdia.setLayout(vbox)
+        canvas = Canvas(Grid(), None)
+        vbox.addWidget(canvas)
+        for x in canvas.scene().items():
+            def fuu(ev):
+                canvas.grid.grid[0][0] = NE
+                x.paintFun = x.paintFuncs[NE]
+                x.update()
+                canvas.update()
+            x.mousePressEvent =  fuu
+        
+        qdia.exec_()
         pass
         
     def about_popup(self):
