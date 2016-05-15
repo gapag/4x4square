@@ -1,3 +1,6 @@
+import copy
+
+
 class Fragment:
     pass
 
@@ -25,8 +28,6 @@ SE = BottomSlash()
 NW = TopSlash()
 SW = BottomBackSlash()
 NE = TopBackSlash()
-
-
 
 
 class Block:
@@ -61,9 +62,79 @@ class GridPattern:
 
 
 class Grid:
+
+    
+    
+    def h_axis_symmetry(self):
+        return [self.h_specular[x] for x in self.grid[0]] == self.grid[3] \
+               and [self.h_specular[x] for x in self.grid[1]] == self.grid[2]
+    
+    def v_axis_symmetry(self):
+        for x in self.grid:
+            if x[0:2] != [self.v_specular[y] for y in x[:-3:-1]]:
+                return False
+        return True
+    
+    def h_axis_color_symmetry(self):
+        return [self.h_specular[self.c_specular[x]] for x in self.grid[0]] == self.grid[3] and [self.h_specular[self.c_specular[x]] for x in self.grid[1]] == self.grid[2]
+    
+    def v_axis_color_symmetry(self):
+        for x in self.grid:
+            if x[0:2] != [self.v_specular[self.c_specular[y]] for y in x[:-3:-1]]:
+                return False
+        return True
+    
+    def pi_symmetry(self):
+        for r in range(0,2):
+            for c in range(0,4):
+                if self.c_specular[self.grid[r][c]] != self.grid[-(r+1)][-(c+1)]:
+                    return False
+        return True
+    
+    
+    def pi_color_symmetry(self):
+        for r in range(0,2):
+            for c in range(0,4):
+                if self.grid[r][c] != self.grid[-(r+1)][-(c+1)]:
+                    return False
+        return True
+        
+    
+    def symmetries(self):
+        syms = []
+        for x in self.possible_symmetries:
+            if x[1]():
+                syms.append(x[0])
+        return syms
     
     def __init__(self):
-        self.grid = self.__shallow_copy_of_matrix(GridPattern.pattern) 
+        self.grid = self.__shallow_copy_of_matrix(GridPattern.pattern)
+        self.possible_symmetries = [("Horizontal", self.h_axis_symmetry),
+            ("Horizontal color", self.h_axis_color_symmetry),
+            ("Vertical", self.v_axis_symmetry),
+            ("Vertical color", self.v_axis_color_symmetry),
+            ("180 deg", self.pi_symmetry),
+            ("180 deg color", self.pi_color_symmetry)]
+        self.v_specular = {
+            SW : SE,
+            NE : NW,
+            NW : NE,
+            SE : SW,
+        }
+        
+        self.h_specular = {
+            SW : NW,
+            NE : SE,
+            NW : SW,
+            SE : NE,
+        }
+        
+        self.c_specular = {
+            SW : NE,
+            NE : SW,
+            NW : SE,
+            SE : NW,
+        }
         
     def __copy__(self):
         cp = Grid()

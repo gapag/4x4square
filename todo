@@ -2,30 +2,9 @@ c43
 r12
 b23
 
-1) add "play/stop" button and a spinner to tell the speed of reproduction
-  which:
-    on play:
-      disable interpreter 
-      disable drops on all items/scene
-      disable action list
-      set current item as 0
-      start a timer that every time:
-        1. selects the current item
-        2. applies the transformation
-        3. updates the screen
-        4. increases the selection pointer and restarts the timer
-      The reproduced items are those selected ones
-      When selection comes to the end, resets the grid and starts again.
-      
-      
-    on stop:
-      kill timer
-      reset the grid
-      rerun the whole transformation list
-      display the grid
-      enable interpreter
-      enable drops on all item scenes
-      enable action list
+0) Have another list where one is allowed to export interesting frames,
+and allowed to turn them around so to fix the order of the animation 
+(a drag-n-drop enabled list)
     
 2) When one presses "print", prompt for filename.
 3) Add menus:

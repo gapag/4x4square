@@ -19,8 +19,10 @@ import finitegeometry.constants as constants
 def pf(vertices):
     def fnk(pai: QPainter, sogi: QStyleOptionGraphicsItem, wi=None,
             offset=(0, 0)):
+        pen = QPen(constants.FOREGROUND_COLOR)
         bru = QBrush(constants.FOREGROUND_COLOR)
         pai.setBrush(bru)
+        pai.setPen(pen)
         verts = [QPointF(x + offset[0], y + offset[1]) for (x, y) in vertices]
         pai.drawConvexPolygon(*verts)
 
@@ -308,10 +310,14 @@ class Canvas(QGraphicsView):
             if mm[1] < v:
                 mm = (i, v)
         return mm
+    
+    request_update_symmetries = pyqtSignal(list)
 
     def redrawScene(self):
         self.scene().clear()
         self.placeInScene()
+        syms = self.grid.symmetries()
+        self.request_update_symmetries.emit(syms)
 
     moveAccepted = pyqtSignal()
 
@@ -386,7 +392,9 @@ class Canvas(QGraphicsView):
 
 
 class SymmetryList(QListWidget):
-    pass
+    def update_symmetries(self, li):
+        self.clear()
+        self.addItems(li)
 
 
 class ActionList(QListWidget):
@@ -616,6 +624,7 @@ class FiniteGeometryEditor(QMainWindow):
         pass
     
     def start_playing_selected(self):
+        self.precomputed = []
         self.precompute_selected_grids()
         
         if len(self.precomputed) > 0:
@@ -650,6 +659,7 @@ class FiniteGeometryEditor(QMainWindow):
         self.createMenus()
         self.setCentralWidget(self.canv)
         self.symm = SymmetryList()
+        self.canv.request_update_symmetries.connect(self.symm.update_symmetries)
         self.acts = ActionList()
         self.decl = DeclarationLabel()
         self.decl.setText("(here goes the current pattern declaration)")
@@ -701,7 +711,7 @@ class FiniteGeometryEditor(QMainWindow):
         for title, item, pos in [
             ("Symmetries", self.symm, Qt.LeftDockWidgetArea),
             ("Actions performed", wi, Qt.RightDockWidgetArea),
-            ("Initial element", self.decl, Qt.BottomDockWidgetArea),
+            ("Initial element", self.decl, Qt.RightDockWidgetArea),
             ("Interpreter", self.inte, Qt.BottomDockWidgetArea)]:
             dock = QDockWidget(title, self)
             dock.setWidget(item)
