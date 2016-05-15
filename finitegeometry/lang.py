@@ -26,8 +26,10 @@ class Interpreter:
             c = Grid.col
         elif cmd == 'r':
             c = Grid.row
-            
-        return lambda x: c(x, src, dst)
+        
+        def func(x):
+            return c(x,src,dst)
+        return func
     
     def read_file(self, filename):
         commands = []

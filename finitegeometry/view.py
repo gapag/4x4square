@@ -398,6 +398,11 @@ class SymmetryList(QListWidget):
 
 
 class ActionList(QListWidget):
+
+    def __init__(self, par = None):
+        super(ActionList, self).__init__(par)
+        self.setDragEnabled(True)
+        
     resetAllAndRerun = pyqtSignal(list)
 
     def mouseDoubleClickEvent(self, QMouseEvent):
@@ -414,6 +419,24 @@ class ActionList(QListWidget):
         self.resetAllAndRerun.emit(li)
         pass
 
+class PlayList(QListWidget):
+    
+    def __init__(self, par = None):
+        super(PlayList, self).__init__(par)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        
+    """ 
+    Should allow drag-drop of items to reorder them.
+    """
+    def enqueue(self, item):
+        self.addItem(item.data(Qt.DisplayRole))
+        it = self.item(self.count()-1)
+        it.setData(Qt.UserRole, item.data(Qt.UserRole))
+        
+    def dropEvent(self, de):
+        super(PlayList, self).dropEvent(de)
+        pass
 
 class DeclarationLabel(QLabel):
     pass
@@ -571,6 +594,12 @@ class FiniteGeometryEditor(QMainWindow):
         for k in range(0, self.acts.count()):
             self.acts.item(k).setCheckState(Qt.Unchecked)
 
+    def enqueue(self):
+        for k in range(0, self.acts.count()):
+            it = self.acts.item(k)
+            if it.checkState() == Qt.Checked:
+                self.playlist.enqueue(it)
+                
     def clearList(self):
         self.acts.clear()
         self.rerun()
@@ -626,13 +655,17 @@ class FiniteGeometryEditor(QMainWindow):
     def start_playing_selected(self):
         self.precomputed = []
         self.precompute_selected_grids()
+        # should create items, each of which with 
+        # the icon corresponding to its payload 
         
-        if len(self.precomputed) > 0:
-            self.disable_controls()
-            self.animation_precomputed_iterator = iter(self.precomputed)
-            self.animation_timer.timeout.connect(self.precomputed_animation_frame)
-            self.animation_timer.start(int(self.speed.text()))
-            pass
+        
+        # if len(self.precomputed) > 0:
+        #     self.disable_controls()
+        #     self.animation_precomputed_iterator = iter(self.precomputed)
+        #     self.animation_timer.timeout.connect(self.precomputed_animation_frame)
+        #     self.animation_timer.start(int(self.speed.text()))
+        #     pass
+        
     
     def precomputed_animation_frame(self):
         try:
@@ -661,8 +694,7 @@ class FiniteGeometryEditor(QMainWindow):
         self.symm = SymmetryList()
         self.canv.request_update_symmetries.connect(self.symm.update_symmetries)
         self.acts = ActionList()
-        self.decl = DeclarationLabel()
-        self.decl.setText("(here goes the current pattern declaration)")
+        self.playlist = PlayList()
         self.inte = InterpreterWidget()
         self.inte.setEditable(True)
         # use validator to implement the logic that does not require
@@ -678,15 +710,17 @@ class FiniteGeometryEditor(QMainWindow):
         self.unsel_all = QPushButton("Unselect all")
         self.print = QPushButton("Print")
         self.to_file = QPushButton("To file")
+        self.to_playlist = QPushButton("To playlist")
         self.print.pressed.connect(self.printall)
         self.sel_all.pressed.connect(self.selectall)
         self.unsel_all.pressed.connect(self.unselectall)
         self.clear.pressed.connect(self.clearList)
+        self.to_playlist.pressed.connect(self.enqueue)
         self.to_file.pressed.connect(self.print_to_file)
 
         bug = QHBoxLayout()
         for k in [self.clear, self.sel_all, self.unsel_all,
-                  self.print, self.to_file]:
+                  self.to_playlist, self.print, self.to_file]:
             bug.addWidget(k)
 
         ctrls = QHBoxLayout()
@@ -711,7 +745,7 @@ class FiniteGeometryEditor(QMainWindow):
         for title, item, pos in [
             ("Symmetries", self.symm, Qt.LeftDockWidgetArea),
             ("Actions performed", wi, Qt.RightDockWidgetArea),
-            ("Initial element", self.decl, Qt.RightDockWidgetArea),
+            ("Playlist", self.playlist, Qt.RightDockWidgetArea),
             ("Interpreter", self.inte, Qt.BottomDockWidgetArea)]:
             dock = QDockWidget(title, self)
             dock.setWidget(item)
