@@ -456,7 +456,8 @@ class InterpreterWidget(QComboBox):
 class FiniteGeometryEditor(QMainWindow):
     def applyAction(self, s,k,n):
         mo = self.canv.interpreter.interpret(s)
-        self.canv.grid = mo(self.canv.grid)
+        if mo:
+            self.canv.grid = mo(self.canv.grid)
         
     def collect_grid(self, s, k, n):
         self.canv.grid = self.acts.item(k).data(Qt.UserRole)
@@ -583,6 +584,7 @@ class FiniteGeometryEditor(QMainWindow):
         pass
         
     def print_to_file(self):
+         
         with open(self.current_file, 'w') as f:
             self.scan_list(self.iterator_over_listWidget(),
                           self.get_command_from_listWidget,
@@ -730,15 +732,15 @@ class FiniteGeometryEditor(QMainWindow):
         self.clear = QPushButton("Clear")
         self.sel_all = QPushButton("Select all")
         self.unsel_all = QPushButton("Unselect all")
-        self.print = QPushButton("Print")
-        self.to_file = QPushButton("To file")
+        self.print = QPushButton("Export selected to PNG")
+        self.to_file = QPushButton("Save as .sqs file")
         #self.to_playlist = QPushButton("To playlist")
-        self.print.pressed.connect(self.printall)
+        self.print.pressed.connect(self.export_sequence)
         self.sel_all.pressed.connect(self.selectall)
         self.unsel_all.pressed.connect(self.unselectall)
         self.clear.pressed.connect(self.clearList)
         #self.to_playlist.pressed.connect(self.enqueue)
-        self.to_file.pressed.connect(self.print_to_file)
+        self.to_file.pressed.connect(self.save_file)
 
         bug = QHBoxLayout()
         for k in [self.clear, self.sel_all, self.unsel_all,
@@ -782,7 +784,6 @@ class FiniteGeometryEditor(QMainWindow):
         path, ty = QFileDialog.getOpenFileName(self, "Open File", '',
                                               "%s\n%s\n%s"%(sqs, x4, any))
         if path:
-            
             if ty == sqs:
                 path = self.add_extension(path,".sqs")
                 self.load_sequence_file(path)
@@ -792,28 +793,13 @@ class FiniteGeometryEditor(QMainWindow):
             else:
                 return
             self.set_current_file(path)
-            
-    
-        
-            
-    def set_current_file(self, path):
-        self.setWindowTitle((self.TITLE+" - %s[*]") % path)
-        self.setWindowModified(False)
-        self.current_file = path
 
-    def save_file(self):
-        if not self.current_file:
-            self.save_file_as()
-        else:
-            self.write_to_disk(self.current_file)
-            pass
-            
     def save_file_as(self):
         sqs = "sequence file (*.sqs)"
         any = "*"
         x4 = "4x4 square file (*.4x4)"
         path, ty = QFileDialog.getSaveFileName(self, "Save File", '',
-                                              "%s\n%s\n%s"%(sqs, x4, any))
+                                               "%s\n%s\n%s"%(sqs, x4, any))
         if path:
             if ty == sqs:
                 path = self.add_extension(path,".sqs")
@@ -823,13 +809,28 @@ class FiniteGeometryEditor(QMainWindow):
                 self.write_4x4_file(path)
             else:
                 pass
-            
-    
+
+
     def add_extension(self, path, desired):
         if path.endswith(desired):
             return path
         else:
             return path+desired
+        
+            
+    def set_current_file(self, path, prompt_for_save = False):
+    
+        self.setWindowTitle((self.TITLE+" - %s[*]") % path)
+        self.setWindowModified(False)
+        self.current_file = path
+
+    def save_file(self):
+        if not self.current_file:
+            self.save_file_as()
+        else:
+            self.write_sequence_file(self.current_file)
+            pass
+            
     
     def write_sequence_file(self, path):
         self.set_current_file(path)
@@ -907,9 +908,9 @@ class FiniteGeometryEditor(QMainWindow):
         self.save.triggered.connect(self.save_file)
         self.saveas = fact("Save as")
         self.saveas.triggered.connect(self.save_file_as)
-        self.export = fact("Export")
+        self.export = fact("Export selected")
         self.export.triggered.connect(self.export_sequence)
-        self.exportas = fact("Export as")
+        self.exportas = fact("Export selected as")
         self.exportas.triggered.connect(self.export_sequence_as)
         self.quit = fact("Quit")
         self.quit.triggered.connect(lambda : QApplication.quit())
