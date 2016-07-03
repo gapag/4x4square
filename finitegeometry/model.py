@@ -145,15 +145,19 @@ class Grid:
         return [[el for el in row] for row in matr]
     
     def row(self, f, t):
-        tmp = self.grid[f]
-        self.grid[f] = self.grid[t]
-        self.grid[t] = tmp
+        new = copy.copy(self)
+        tmp = new.grid[f]
+        new.grid[f] = new.grid[t]
+        new.grid[t] = tmp
+        return new
     
     def col(self, f, t):
-        for r in self.grid:
+        new = copy.copy(self)
+        for r in new.grid:
             tmp = r[f]
             r[f] = r[t]
             r[t] = tmp
+        return new
     
     def intToBlock(self, i):
         if i == 0:
@@ -172,14 +176,16 @@ class Grid:
             f = self.intToBlock(f)
         if isinstance(t, int):
             t = self.intToBlock(t)
+        new = copy.copy(self)
         # f and t are instances of block
         from_ = f.indexes()
         to_ = t.indexes()
         for (ir, ic) in from_:
             (jr, jc) = next(to_)
-            tmp = self.grid[ir][ic]
-            self.grid[ir][ic] = self.grid[jr][jc]
-            self.grid[jr][jc] = tmp
+            tmp = new.grid[ir][ic]
+            new.grid[ir][ic] = new.grid[jr][jc]
+            new.grid[jr][jc] = tmp
+        return new
 
     def __str__(self):
         buf = ""

@@ -4,7 +4,8 @@ import os
 from PyQt5.QtCore import QPointF, QRectF, Qt, QLineF, QMimeData, QPoint, \
     pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QPainter, QBrush, QColor, QPen, QDrag, QPixmap, \
-    QDropEvent, QDragLeaveEvent, QResizeEvent, QImageWriter, QImage, QIcon
+    QDropEvent, QDragLeaveEvent, QResizeEvent, QImageWriter, QImage, QIcon, \
+    QDragEnterEvent
 from PyQt5.QtPrintSupport import QPrinter
 from PyQt5.QtWidgets import QApplication, QGraphicsView, QMainWindow, \
     QGraphicsItem, QStyleOptionGraphicsItem, QGraphicsScene, QListWidget, \
@@ -176,7 +177,7 @@ class Canvas(QGraphicsView):
         #        self.setRubberBandSelectionMode()
         self.setAcceptDrops(True)
         self.physicalGrid = {}
-        self.setAcceptDrops(True)
+        
         self.setScene(scene)
         self.rubberBandChanged.connect(self.createSelection)
         self.setCacheMode(QGraphicsView.CacheBackground)
@@ -324,10 +325,10 @@ class Canvas(QGraphicsView):
     def textFromInterpreter(self, s):
         mo = self.interpreter.interpret(s)
         if mo:
-            mo(self.grid)
+            self.grid = mo(self.grid)
             self.redrawScene()
             if not self.timer.isActive():
-                self.parent().insert_action_item_in_list(s)
+                self.parent().insert_action_item_in_list(s,self.grid)
                 self.moveAccepted.emit()
                 
     def setItemIcon(self, lit):
@@ -339,7 +340,6 @@ class Canvas(QGraphicsView):
         pai.setRenderHint(QPainter.Antialiasing)
         self.scene().render(pai)
         pai.end()
-        # pim.scaled(QSize(50,50), Qt.IgnoreAspectRatio,Qt.FastTransformation)
         ico = QIcon(pim)
         lit.setIcon(ico)
 
@@ -416,7 +416,7 @@ class ActionList(QListWidget):
 
         # emit reset of model + rerun of the present items in the list
         # self.clear()
-        self.resetAllAndRerun.emit(li)
+        #self.resetAllAndRerun.emit(li)
         pass
 
 class PlayList(QListWidget):
@@ -424,7 +424,9 @@ class PlayList(QListWidget):
     def __init__(self, par = None):
         super(PlayList, self).__init__(par)
         self.setDragEnabled(True)
+        self.setDefaultDropAction(Qt.MoveAction)
         self.setAcceptDrops(True)
+        self.model().rowsInserted.connect(self.check_duplicate)
         
     """ 
     Should allow drag-drop of items to reorder them.
@@ -433,10 +435,15 @@ class PlayList(QListWidget):
         self.addItem(item.data(Qt.DisplayRole))
         it = self.item(self.count()-1)
         it.setData(Qt.UserRole, item.data(Qt.UserRole))
+
         
     def dropEvent(self, de):
         super(PlayList, self).dropEvent(de)
         pass
+    
+    def check_duplicate(self, a, b, c):
+        pass
+
 
 class DeclarationLabel(QLabel):
     pass
@@ -449,7 +456,11 @@ class InterpreterWidget(QComboBox):
 class FiniteGeometryEditor(QMainWindow):
     def applyAction(self, s,k,n):
         mo = self.canv.interpreter.interpret(s)
-        mo(self.canv.grid)
+        self.canv.grid = mo(self.canv.grid)
+        
+    def collect_grid(self, s, k, n):
+        self.canv.grid = self.acts.item(k).data(Qt.UserRole)
+        pass
         
     # def replace_precomputed_grid(self, s, k, n):
     #     #s is the precomputed grid...
@@ -479,7 +490,7 @@ class FiniteGeometryEditor(QMainWindow):
             n = before_interpret(s, k, n)
             interpret(s,k,n)
             n = after_interpret(s, k, n)
-        after_list(n)
+        #after_list(n)
         
     
     def scan_list_of_commands(self, iterat, get_command, init_state, before_interpret,
@@ -546,18 +557,20 @@ class FiniteGeometryEditor(QMainWindow):
                       after_list=self.rerun)
         return self.precomputed
 
-    def insert_action_item_in_list(self, s):
+    def insert_action_item_in_list(self, s, grid):
         lit = QListWidgetItem(s, self.acts)
         lit.setFlags(lit.flags() | Qt.ItemIsUserCheckable)
+        lit.setData(Qt.UserRole, grid)
         lit.setCheckState(False)
         self.canv.setItemIcon(lit)
 
     def load_sequence_file(self, path):
         commands = self.canv.interpreter.read_file(path)
         self.acts.clear()
+        self.insert_action_item_in_list("<init>", self.canv.grid)
         def addItemToList(s,k,n):
             self.redraw_and_update_canvas()
-            self.insert_action_item_in_list(s)
+            self.insert_action_item_in_list(s, self.canv.grid)
 
         self.scan_list_of_commands(iterat=commands,
                       get_command=lambda x : x,
@@ -567,18 +580,18 @@ class FiniteGeometryEditor(QMainWindow):
                       after_list=lambda x: self.redraw_and_update_canvas()
                       )
 
-
-
         pass
         
     def print_to_file(self):
         with open(self.current_file, 'w') as f:
-            self.scan_list_of_commands(self.iterator_over_listWidget(),
+            self.scan_list(self.iterator_over_listWidget(),
                           self.get_command_from_listWidget,
                           init_state=f,
+                          interpret=self.collect_grid,
                           before_interpret=lambda x, y, z: f,
                           after_interpret=self.write_comment,
                           after_list=self.rerun)
+        self.acts.setCurrentRow(self.acts.count()-1)
 
     def write_comment(self, x, y, f):
         f.write(x + "\n")
@@ -601,23 +614,25 @@ class FiniteGeometryEditor(QMainWindow):
                 self.playlist.enqueue(it)
                 
     def clearList(self):
-        self.acts.clear()
-        self.rerun()
+        for x in range(1,self.acts.count()):
+            self.acts.takeItem(1)
+        self.acts.setCurrentItem(self.acts.item(0)) 
+        
 
     def animation_frame(self):
         if self.frame == self.acts.count():
-            self.canv.resetGrid()
-            self.canv.redrawScene()
-            self.canv.update()
-            self.acts.clearSelection()
+            # self.canv.resetGrid()
+            # self.canv.redrawScene()
+            # self.canv.update()
+            # self.acts.clearSelection()
             self.frame = 0
-        else:
-            self.frameInList()
+        
+        self.frameInList()
 
     def frameInList(self):
         it = self.acts.item(self.frame)
-        s = it.data(Qt.DisplayRole)
-        self.canv.textFromInterpreter(s)
+        #s = it.data(Qt.DisplayRole)
+        #self.canv.textFromInterpreter(s)
         self.acts.setCurrentItem(self.acts.item(self.frame))
         self.frame = (self.frame + 1)
 
@@ -630,7 +645,7 @@ class FiniteGeometryEditor(QMainWindow):
     def __enable_controls(self, bo):
         self.inte.setEnabled(bo)
         self.play.setEnabled(bo)
-        self.play_selected.setEnabled(bo)
+        
         self.canv.setAcceptDrops(bo)
         self.acts.setEnabled(bo)
     
@@ -649,7 +664,7 @@ class FiniteGeometryEditor(QMainWindow):
         self.animation_timer.timeout.disconnect()
         self.enable_controls()
         self.animation_timer.stop()
-        self.rerun()
+        #self.rerun()
         pass
     
     def start_playing_selected(self):
@@ -679,6 +694,11 @@ class FiniteGeometryEditor(QMainWindow):
         listitem.setSelected(True)
         pass
 
+    def change_canvas_on_selection(self):
+        it = self.acts.currentItem()
+        self.canv.grid = it.data(Qt.UserRole)
+        self.canv.redrawScene()
+
     TITLE = "The 4x4 Square[*]"
     def __init__(self):
         super(FiniteGeometryEditor, self).__init__()
@@ -694,6 +714,7 @@ class FiniteGeometryEditor(QMainWindow):
         self.symm = SymmetryList()
         self.canv.request_update_symmetries.connect(self.symm.update_symmetries)
         self.acts = ActionList()
+        self.insert_action_item_in_list("<init>", self.canv.grid)
         self.playlist = PlayList()
         self.inte = InterpreterWidget()
         self.inte.setEditable(True)
@@ -703,6 +724,7 @@ class FiniteGeometryEditor(QMainWindow):
 #        self.canv.interpretMove.connect(self.canv.textFromInterpreter)
         self.canv.moveAccepted.connect(lambda : self.setWindowModified(True))
         self.acts.resetAllAndRerun.connect(self.rerun)
+        self.acts.currentItemChanged.connect(self.change_canvas_on_selection)
 
         la = QVBoxLayout()
         self.clear = QPushButton("Clear")
@@ -710,31 +732,29 @@ class FiniteGeometryEditor(QMainWindow):
         self.unsel_all = QPushButton("Unselect all")
         self.print = QPushButton("Print")
         self.to_file = QPushButton("To file")
-        self.to_playlist = QPushButton("To playlist")
+        #self.to_playlist = QPushButton("To playlist")
         self.print.pressed.connect(self.printall)
         self.sel_all.pressed.connect(self.selectall)
         self.unsel_all.pressed.connect(self.unselectall)
         self.clear.pressed.connect(self.clearList)
-        self.to_playlist.pressed.connect(self.enqueue)
+        #self.to_playlist.pressed.connect(self.enqueue)
         self.to_file.pressed.connect(self.print_to_file)
 
         bug = QHBoxLayout()
         for k in [self.clear, self.sel_all, self.unsel_all,
-                  self.to_playlist, self.print, self.to_file]:
+                  self.print, self.to_file]:
             bug.addWidget(k)
 
         ctrls = QHBoxLayout()
         self.play = QPushButton("Play")
         self.play.pressed.connect(self.start_playing)
-        self.play_selected = QPushButton("Play selected")
-        self.play_selected.pressed.connect(self.start_playing_selected)
         self.stop = QPushButton("Stop")
         self.stop.pressed.connect(self.stop_playing)
         self.speed = QSpinBox()
         self.speed.setSingleStep(100)
         self.speed.setMaximum(10000)
         self.speed.setValue(500)
-        for k in [self.play, self.play_selected, self.stop, self.speed]:
+        for k in [self.play,  self.stop, self.speed]:
             ctrls.addWidget(k)
 
         la.addWidget(self.acts)
