@@ -32,10 +32,10 @@ def pf(vertices):
 
 class Tile(QGraphicsItem):
     paintFuncs = {
-        SE: pf([(0, 50), (50, 50), (50, 0)]),
-        NW: pf([(0, 0), (0, 50), (50, 0)]),
-        SW: pf([(0, 0), (0, 50), (50, 50)]),
-        NE: pf([(0, 0), (50, 50), (50, 0)])
+        str(SE): pf([(0, 50), (50, 50), (50, 0)]),
+        str(NW): pf([(0, 0), (0, 50), (50, 0)]),
+        str(SW): pf([(0, 0), (0, 50), (50, 50)]),
+        str(NE): pf([(0, 0), (50, 50), (50, 0)])
     }
 
     def __init__(self, indexi, indexj, frag, par=None):
@@ -43,7 +43,7 @@ class Tile(QGraphicsItem):
         self.row = indexi
         self.col = indexj
         self.hovered = False
-        self.paintFun = self.paintFuncs[frag]
+        self.paintFun = self.paintFuncs[str(frag)]
         self.setAcceptDrops(True)
 
     def paint(self, pai: QPainter, sty, wi=None):
@@ -106,23 +106,6 @@ class Tile(QGraphicsItem):
 
         drag.exec_(Qt.MoveAction | Qt.CopyAction, Qt.CopyAction)
 
-
-        # pixmap = QPixmap(34, 34)
-        # pixmap.fill(Qt.white)
-        # 
-        # painter = QPainter(pixmap)
-        # painter.translate(15, 15)
-        # painter.setRenderHint(QPainter.Antialiasing)
-        # self.paint(painter, None, None)
-        # painter.end()
-        # 
-        # pixmap.setMask(pixmap.createHeuristicMask())
-        # 
-        # drag.setPixmap(pixmap)
-        # drag.setHotSpot(QPoint(15, 20))
-        # 
-        # drag.exec_()
-        # self.setCursor(Qt.OpenHandCursor)
 
     def mouseReleaseEvent(self, e):
         if self.isSelected():
@@ -321,6 +304,10 @@ class Canvas(QGraphicsView):
         self.request_update_symmetries.emit(syms)
 
     moveAccepted = pyqtSignal()
+    select_last = pyqtSignal()
+
+    def enterEvent(self, QEvent):
+        self.select_last.emit()
 
     def textFromInterpreter(self, s):
         mo = self.interpreter.interpret(s)
@@ -404,7 +391,7 @@ class ActionList(QListWidget):
         self.setDragEnabled(True)
         
     resetAllAndRerun = pyqtSignal(list)
-
+    
     def mouseDoubleClickEvent(self, QMouseEvent):
         it = self.selectedItems()[0]
         ss = self.row(it) + 1
@@ -439,7 +426,6 @@ class PlayList(QListWidget):
         
     def dropEvent(self, de):
         super(PlayList, self).dropEvent(de)
-        pass
     
     def check_duplicate(self, a, b, c):
         pass
@@ -622,7 +608,7 @@ class FiniteGeometryEditor(QMainWindow):
         
 
     def animation_frame(self):
-        if self.frame == self.acts.count():
+        if self.frame == self.playlist.count():
             # self.canv.resetGrid()
             # self.canv.redrawScene()
             # self.canv.update()
@@ -632,10 +618,10 @@ class FiniteGeometryEditor(QMainWindow):
         self.frameInList()
 
     def frameInList(self):
-        it = self.acts.item(self.frame)
+        it = self.playlist.item(self.frame)
         #s = it.data(Qt.DisplayRole)
         #self.canv.textFromInterpreter(s)
-        self.acts.setCurrentItem(self.acts.item(self.frame))
+        self.playlist.setCurrentItem(self.playlist.item(self.frame))
         self.frame = (self.frame + 1)
 
     def disable_controls(self):
@@ -647,14 +633,17 @@ class FiniteGeometryEditor(QMainWindow):
     def __enable_controls(self, bo):
         self.inte.setEnabled(bo)
         self.play.setEnabled(bo)
-        
+        self.playlist.setEnabled(bo)
         self.canv.setAcceptDrops(bo)
         self.acts.setEnabled(bo)
     
 
     def start_playing(self):
-        if self.acts.count() > 0:
-            self.frame = self.acts.count()
+        self.playlist.currentItemChanged.connect(self.change_canvas_on_selection(self.playlist))
+        
+        # and connect self.change_canvas_on_selection to playlist
+        if self.playlist.count() > 0:
+            self.frame = self.playlist.count()
             self.disable_controls()
             self.animation_timer.timeout.connect(self.animation_frame)
             self.canv.redrawScene()
@@ -663,7 +652,9 @@ class FiniteGeometryEditor(QMainWindow):
         pass
 
     def stop_playing(self):
+        self.playlist.currentItemChanged.disconnect()
         self.animation_timer.timeout.disconnect()
+        self.connect_acts()
         self.enable_controls()
         self.animation_timer.stop()
         #self.rerun()
@@ -696,15 +687,24 @@ class FiniteGeometryEditor(QMainWindow):
         listitem.setSelected(True)
         pass
 
-    def change_canvas_on_selection(self):
-        it = self.acts.currentItem()
-        self.canv.grid = it.data(Qt.UserRole)
-        self.canv.redrawScene()
+    def change_canvas_on_selection(self, lst):
+        def _fn():
+            it = lst.currentItem()
+            self.canv.grid = it.data(Qt.UserRole)
+            self.canv.redrawScene()
+        return _fn
+        
 
+    def connect_acts(self):
+        self.acts.resetAllAndRerun.connect(self.rerun)
+        self.acts.currentItemChanged.connect(self.change_canvas_on_selection(self.acts))
+        
+        
     TITLE = "The 4x4 Square[*]"
     def __init__(self):
         super(FiniteGeometryEditor, self).__init__()
         self.frame = 0
+        self.will_overwrite = False
         self.current_file = None
         self.precomputed = []
         self.animation_precomputed_iterator = None
@@ -725,8 +725,8 @@ class FiniteGeometryEditor(QMainWindow):
         self.inte.currentTextChanged.connect(self.canv.textFromInterpreter)
 #        self.canv.interpretMove.connect(self.canv.textFromInterpreter)
         self.canv.moveAccepted.connect(lambda : self.setWindowModified(True))
-        self.acts.resetAllAndRerun.connect(self.rerun)
-        self.acts.currentItemChanged.connect(self.change_canvas_on_selection)
+        self.connect_acts()
+        self.canv.select_last.connect(lambda : self.acts.setCurrentItem(self.acts.item(self.acts.count()-1)))
 
         la = QVBoxLayout()
         self.clear = QPushButton("Clear")
@@ -881,7 +881,7 @@ class FiniteGeometryEditor(QMainWindow):
         for x in canvas.scene().items():
             def fuu(ev):
                 canvas.grid.grid[0][0] = NE
-                x.paintFun = x.paintFuncs[NE]
+                x.paintFun = x.paintFuncs[str(NE)]
                 x.update()
                 canvas.update()
             x.mousePressEvent =  fuu
