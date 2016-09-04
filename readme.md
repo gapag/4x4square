@@ -6,7 +6,10 @@ investigated (to my knowledge) by Steven H. Cullinane.
 * Links:
 http://finitegeometry.org/sc/16/geometry.html
 
-### Future work: ###
+### License ###
+MIT licensed.
+
+### Future work ###
 * The "Actions performed" list should be a tree, so that 
  a user can develop several different threads of modifications.
 
