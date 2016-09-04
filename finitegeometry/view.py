@@ -32,10 +32,10 @@ def pf(vertices):
 
 class Tile(QGraphicsItem):
     paintFuncs = {
-        str(SE): pf([(0, 50), (50, 50), (50, 0)]),
-        str(NW): pf([(0, 0), (0, 50), (50, 0)]),
-        str(SW): pf([(0, 0), (0, 50), (50, 50)]),
-        str(NE): pf([(0, 0), (50, 50), (50, 0)])
+        SE: pf([(0, 50), (50, 50), (50, 0)]),
+        NW: pf([(0, 0), (0, 50), (50, 0)]),
+        SW: pf([(0, 0), (0, 50), (50, 50)]),
+        NE: pf([(0, 0), (50, 50), (50, 0)])
     }
 
     def __init__(self, indexi, indexj, frag, par=None):
@@ -43,9 +43,9 @@ class Tile(QGraphicsItem):
         self.row = indexi
         self.col = indexj
         self.hovered = False
-        self.paintFun = self.paintFuncs[str(frag)]
+        self.paintFun = self.paintFuncs[frag]
         self.setAcceptDrops(True)
-
+        
     def paint(self, pai: QPainter, sty, wi=None):
         if self.isSelected():
             pai.fillRect(self.boundingRect(), constants.SELECTION_COLOR)
@@ -308,6 +308,8 @@ class Canvas(QGraphicsView):
 
     def enterEvent(self, QEvent):
         self.select_last.emit()
+        FiniteGeometryEditor.STATUS_BAR.showMessage("Right-click drag makes a selection. Left-click drag moves the selection.")
+    
 
     def textFromInterpreter(self, s):
         mo = self.interpreter.interpret(s)
@@ -383,6 +385,9 @@ class SymmetryList(QListWidget):
         self.clear()
         self.addItems(li)
 
+    def enterEvent(self, QEvent):
+        FiniteGeometryEditor.STATUS_BAR.showMessage("Shows the symmetries holding in the currently displayed pattern.")
+
 
 class ActionList(QListWidget):
 
@@ -405,6 +410,11 @@ class ActionList(QListWidget):
         # self.clear()
         #self.resetAllAndRerun.emit(li)
         pass
+    
+    def enterEvent(self, QEvent):
+        FiniteGeometryEditor.STATUS_BAR.showMessage("Double-click erases all history after the double-clicked action. "
+                                                    "Single click shows the pattern in the canvas."
+                                                    "Drag-drop in the Playlist allowed.")
 
 class PlayList(QListWidget):
     
@@ -425,7 +435,14 @@ class PlayList(QListWidget):
 
         
     def dropEvent(self, de):
+        
         super(PlayList, self).dropEvent(de)
+        #self.addItem(item.data(Qt.DisplayRole))
+        #it = self.item(self.count()-1)
+        #it.setData(Qt.UserRole, item.data(Qt.UserRole))
+
+    def enterEvent(self, QEvent):
+        FiniteGeometryEditor.STATUS_BAR.showMessage("Drag and drop to reorder.")    
     
     def check_duplicate(self, a, b, c):
         pass
@@ -436,8 +453,13 @@ class DeclarationLabel(QLabel):
 
 
 class InterpreterWidget(QComboBox):
-    pass
-
+    def enterEvent(self, QEvent):
+        self.select_last.emit()
+        FiniteGeometryEditor.STATUS_BAR.showMessage("Command pattern: Xab where a,b in {1,2,3,4} and X in {r,c,b} (row, column, block swap)"
+                                                    "\nE.g., write r23 to swap row 2 with row 3")
+    
+    select_last = pyqtSignal()
+    
 
 class FiniteGeometryEditor(QMainWindow):
     def applyAction(self, s,k,n):
@@ -701,6 +723,7 @@ class FiniteGeometryEditor(QMainWindow):
         
         
     TITLE = "The 4x4 Square[*]"
+    STATUS_BAR = None
     def __init__(self):
         super(FiniteGeometryEditor, self).__init__()
         self.frame = 0
@@ -726,7 +749,9 @@ class FiniteGeometryEditor(QMainWindow):
 #        self.canv.interpretMove.connect(self.canv.textFromInterpreter)
         self.canv.moveAccepted.connect(lambda : self.setWindowModified(True))
         self.connect_acts()
-        self.canv.select_last.connect(lambda : self.acts.setCurrentItem(self.acts.item(self.acts.count()-1)))
+        sel_last = lambda : self.acts.setCurrentItem(self.acts.item(self.acts.count()-1))
+        self.canv.select_last.connect(sel_last)
+        self.inte.select_last.connect(sel_last)
 
         la = QVBoxLayout()
         self.clear = QPushButton("Clear")
@@ -775,7 +800,9 @@ class FiniteGeometryEditor(QMainWindow):
             dock.setFeatures(
                 QDockWidget.DockWidgetFloatable | QDockWidget.DockWidgetMovable)
             self.addDockWidget(pos, dock)
-        self.setStatusBar(QStatusBar())
+        FiniteGeometryEditor.STATUS_BAR = QStatusBar()
+        self.setStatusBar(self.STATUS_BAR)
+        self.statusBar().showMessage("Welcome to %s!"%self.TITLE[:-3])
 
     def load_file(self):
         sqs = "sequence file (*.sqs)"
@@ -881,7 +908,7 @@ class FiniteGeometryEditor(QMainWindow):
         for x in canvas.scene().items():
             def fuu(ev):
                 canvas.grid.grid[0][0] = NE
-                x.paintFun = x.paintFuncs[str(NE)]
+                x.paintFun = x.paintFuncs[NE]
                 x.update()
                 canvas.update()
             x.mousePressEvent =  fuu

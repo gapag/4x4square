@@ -2,7 +2,11 @@ import copy
 
 
 class Fragment:
-    pass
+    def __hash__(self):
+        return str(self).__hash__()
+    
+    def __eq__(self, other):
+        return str(self) == str(other)
 
 class BottomSlash(Fragment):
     def __init__(self):
@@ -10,6 +14,7 @@ class BottomSlash(Fragment):
     
     def __str__(self):
         return "◢"
+    
 
 
 class TopSlash(Fragment):
